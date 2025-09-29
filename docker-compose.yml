@@ -1,0 +1,33 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: springcart-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-springcart}
+      POSTGRES_USER: ${POSTGRES_USER:-springcart}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-springcart}
+      TZ: ${TZ:-UTC}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      # Place your seed SQL at ./docker/postgres/init.sql (relative to this file)
+      # It will run automatically on first container start (new empty data volume)
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-springcart} -d ${POSTGRES_DB:-springcart}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - springcart-net
+
+volumes:
+  db-data:
+
+networks:
+  springcart-net:
+    name: springcart-net

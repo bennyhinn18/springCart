@@ -1,0 +1,10 @@
+-- Intentionally left blank.
+-- Postgres Docker initialization (docker/postgres/init.sql) is the authoritative source
+-- of schema and seed data for this project as per current requirements.
+--
+-- If you want to seed via Spring in the future (e.g., for H2 or local Postgres),
+-- you can add SQL statements here and ensure:
+--   spring.sql.init.mode=always
+--   spring.jpa.defer-datasource-initialization=true
+--
+-- For now, keeping this file empty prevents accidental inserts during dev runs.
