@@ -15,11 +15,24 @@ import {
   Link,
   useNavigate,
 } from "react-router-dom";
+import "./index.css";
+import { FaBox, FaSearch, FaPlus, FaEdit, FaTrash } from "react-icons/fa";
 
-// ---------------------------------------------
-// API helper
-// ---------------------------------------------
-const API_BASE = (import.meta?.env?.VITE_API_BASE_URL || "").trim(); // e.g., http://localhost:8080; empty means use Vite proxy
+/**
+ * main.jsx
+ *
+ * Modernized frontend entry. Replaces the DashboardPage with a Tailwind-driven,
+ * card-based product grid and refreshed summary cards. Keeps the existing
+ * dummy auth, Admin CRUD and other pages intact.
+ *
+ * Note: This file expects the Tailwind CSS pipeline to be set up and
+ * `./index.css` to provide the Tailwind directives (already created).
+ */
+
+/* -------------------------
+   API helper (simple)
+   ------------------------- */
+const API_BASE = (import.meta?.env?.VITE_API_BASE_URL || "").trim(); // empty means Vite proxy
 
 async function apiFetch(path, options = {}) {
   const url = `${API_BASE}${path}`;
@@ -36,9 +49,9 @@ async function apiFetch(path, options = {}) {
   return contentType.includes("application/json") ? res.json() : res.text();
 }
 
-// ---------------------------------------------
-// Auth context (dummy auth)
-// ---------------------------------------------
+/* -------------------------
+   Auth (dummy)
+   ------------------------- */
 const AuthContext = createContext(null);
 
 function useAuth() {
@@ -74,7 +87,7 @@ function AuthProvider({ children }) {
     try {
       await apiFetch("/api/auth/logout", { method: "POST" });
     } catch {
-      // ignore any error for dummy logout
+      // ignore
     }
     setAuth(null);
     localStorage.removeItem("auth");
@@ -93,53 +106,277 @@ function RequireAuth() {
   return <Outlet />;
 }
 
-// ---------------------------------------------
-// UI components
-// ---------------------------------------------
-function Layout({ children }) {
+/* -------------------------
+   Layout
+   ------------------------- */
+function Header() {
   const { auth, logout } = useAuth();
   return (
-    <div
-      style={{
-        fontFamily:
-          "system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial",
-      }}
-    >
-      <header
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          padding: 12,
-          borderBottom: "1px solid #ddd",
-        }}
-      >
-        <div>
-          <strong>SpringCart</strong>
-        </div>
-        <nav style={{ display: "flex", gap: 12 }}>
-          {auth?.token ? (
-            <>
-              <Link to="/dashboard">Dashboard</Link>
-              <Link to="/admin">Admin</Link>
-              <button
-                onClick={logout}
-                style={{ padding: "6px 10px", cursor: "pointer" }}
-                title="Logout"
-              >
-                Logout
-              </button>
-            </>
-          ) : (
-            <Link to="/login">Login</Link>
-          )}
-        </nav>
-      </header>
-      <main style={{ padding: 16 }}>{children}</main>
+    <header className="app-header">
+      <div className="flex items-center gap-3">
+        <div className="app-title">SpringCart</div>
+        {/* <div className="text-sm text-slate-500">• Lightweight demo</div>*/}
+      </div>
+
+      <nav className="app-nav flex items-center gap-4">
+        {auth?.token ? (
+          <>
+            <Link
+              to="/dashboard"
+              className="text-sm text-slate-700 hover:text-slate-900"
+            >
+              Dashboard
+            </Link>
+            <Link
+              to="/admin"
+              className="text-sm text-slate-700 hover:text-slate-900"
+            >
+              Admin
+            </Link>
+            <button
+              onClick={logout}
+              className="btn btn-outline"
+              title="Logout"
+              aria-label="Logout"
+            >
+              Logout
+            </button>
+          </>
+        ) : (
+          <Link
+            to="/login"
+            className="text-sm text-slate-700 hover:text-slate-900"
+          >
+            Login
+          </Link>
+        )}
+      </nav>
+    </header>
+  );
+}
+
+function Layout({ children }) {
+  return (
+    <div className="app-container">
+      <Header />
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {children}
+      </main>
     </div>
   );
 }
 
+/* -------------------------
+   ProductCard (modern)
+   ------------------------- */
+function ProductCard({ product, onEdit }) {
+  return (
+    <article className="card flex flex-col">
+      <div className="product-media">
+        {product.imageUrl ? (
+          <img
+            src={product.imageUrl}
+            alt={product.name}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <div className="text-slate-400">
+            <FaBox size={36} />
+          </div>
+        )}
+      </div>
+
+      <div className="mt-3 flex-1 flex flex-col">
+        <h3 className="card-title">{product.name}</h3>
+        <p className="card-desc truncate-2">
+          {product.description || "No description"}
+        </p>
+      </div>
+
+      <div className="product-meta mt-4 items-center">
+        <div className="text-sm text-slate-600">
+          <span className="badge">Stock</span>{" "}
+          <span className="font-medium ml-2">
+            {product.totalItemsInStock ?? 0}
+          </span>
+        </div>
+        <div className="text-lg font-bold text-brand-500">
+          {Intl.NumberFormat(undefined, {
+            style: "currency",
+            currency: "INR",
+          }).format(Number(product.price ?? 0))}
+        </div>
+      </div>
+
+      {/* <div className="mt-3 flex gap-2">
+        <button
+          onClick={() => onEdit && onEdit(product)}
+          className="btn btn-outline flex items-center gap-2"
+        >
+          <FaEdit />
+          Edit
+        </button>
+        <Link
+          to={`/admin`}
+          className="btn btn-primary flex items-center gap-2 ml-auto"
+        >
+          <FaPlus />
+          Add to Catalog
+        </Link>
+      </div>*/}
+    </article>
+  );
+}
+
+/* -------------------------
+   DashboardPage (modernized)
+   ------------------------- */
+function DashboardPage() {
+  const [summary, setSummary] = useState(null);
+  const [products, setProducts] = useState([]);
+  const [q, setQ] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [loadingProducts, setLoadingProducts] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const s = await apiFetch("/api/dashboard");
+        if (alive) setSummary(s);
+      } catch (err) {
+        if (alive) setError(err?.message || "Failed to load dashboard");
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const loadProducts = async (search = "") => {
+    setLoadingProducts(true);
+    setError("");
+    try {
+      const url = search
+        ? `/api/products?q=${encodeURIComponent(search)}`
+        : "/api/products";
+      const data = await apiFetch(url);
+      setProducts(data);
+    } catch (err) {
+      setError(err?.message || "Failed to load products");
+    } finally {
+      setLoadingProducts(false);
+    }
+  };
+
+  useEffect(() => {
+    loadProducts("");
+  }, []);
+
+  const onSearch = (e) => {
+    e.preventDefault();
+    loadProducts(q);
+  };
+
+  return (
+    <Layout>
+      <div className="grid grid-cols-1 gap-6">
+        {/* Top summary cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="card">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm text-slate-500">Total Products</div>
+                <div className="text-2xl font-semibold mt-1">
+                  {summary?.totalProducts ?? "—"}
+                </div>
+              </div>
+              <div className="p-3 bg-brand-50 rounded-md">
+                <FaBox className="text-brand-500" />
+              </div>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="text-sm text-slate-500">Total Items in Stock</div>
+            <div className="text-2xl font-semibold mt-2">
+              {summary?.totalItemsInStock ?? "—"}
+            </div>
+            <div className="text-sm text-slate-500 mt-1">
+              Across all products
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="text-sm text-slate-500">Total Inventory Value</div>
+            <div className="text-2xl font-semibold mt-2">
+              {Intl.NumberFormat(undefined, {
+                style: "currency",
+                currency: "INR",
+              }).format(Number(summary?.totalInventoryValue ?? 0))}
+            </div>
+            <div className="text-sm text-slate-500 mt-1">
+              Sum(price × stock)
+            </div>
+          </div>
+        </div>
+
+        {/* Search & categories */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <form
+            onSubmit={onSearch}
+            className="flex items-center gap-2 w-full sm:w-1/2"
+          >
+            <div className="relative w-full">
+              <input
+                className="input pr-10"
+                placeholder="Search products..."
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+              />
+              <button
+                type="submit"
+                className="absolute right-1 top-1/2 -translate-y-1/2 btn btn-outline"
+                aria-label="Search"
+              >
+                <FaSearch />
+              </button>
+            </div>
+          </form>
+
+          <div className="flex items-center gap-3">
+            <div className="text-sm text-slate-600">Categories</div>
+            <div className="badge">{summary?.categories?.length ?? 0}</div>
+          </div>
+        </div>
+
+        {/* Product grid */}
+        <section>
+          <h2 className="text-lg font-semibold mb-3">Products</h2>
+
+          {loadingProducts ? (
+            <div className="panel empty-state">Loading products…</div>
+          ) : error ? (
+            <div className="panel empty-state text-red-600">{error}</div>
+          ) : products.length === 0 ? (
+            <div className="panel empty-state">No products found.</div>
+          ) : (
+            <div className="product-grid">
+              {products.map((p) => (
+                <ProductCard key={p.id} product={p} />
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+    </Layout>
+  );
+}
+
+/* -------------------------
+   LoginPage
+   ------------------------- */
 function LoginPage() {
   const navigate = useNavigate();
   const { auth, login } = useAuth();
@@ -149,8 +386,6 @@ function LoginPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    // Only redirect to dashboard when the user is authenticated.
-    // This prevents navigating away while the user is still on the login page.
     if (auth?.token) {
       navigate("/dashboard", { replace: true });
     }
@@ -172,195 +407,55 @@ function LoginPage() {
 
   return (
     <Layout>
-      <h1>Login</h1>
-      <p>Use any dummy username and password to log in.</p>
-      <form
-        onSubmit={onSubmit}
-        style={{ display: "grid", gap: 12, maxWidth: 360 }}
-      >
-        <label>
-          Username
-          <input
-            style={{ width: "100%", padding: 8, marginTop: 4 }}
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="Enter username"
-            required
-          />
-        </label>
-        <label>
-          Password
-          <input
-            type="password"
-            style={{ width: "100%", padding: 8, marginTop: 4 }}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Enter password"
-            required
-          />
-        </label>
-        <button
-          type="submit"
-          disabled={submitting}
-          style={{ padding: "8px 12px", cursor: "pointer" }}
-        >
-          {submitting ? "Logging in…" : "Login"}
-        </button>
-        {error ? <div style={{ color: "crimson" }}>{error}</div> : null}
-      </form>
+      <div className="max-w-md mx-auto panel">
+        <h1 className="text-2xl font-semibold mb-2">Welcome back</h1>
+        <p className="text-sm text-slate-500 mb-4">
+          Sign in with any dummy username and password.
+        </p>
+
+        <form onSubmit={onSubmit} className="space-y-3">
+          <div>
+            <label className="form-label">Username</label>
+            <input
+              required
+              className="input"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="you@example.com"
+            />
+          </div>
+
+          <div>
+            <label className="form-label">Password</label>
+            <input
+              required
+              type="password"
+              className="input"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter a password"
+            />
+          </div>
+
+          {error && <div className="text-red-600 text-sm">{error}</div>}
+
+          <div className="flex items-center justify-between">
+            <button className="btn btn-primary" disabled={submitting}>
+              {submitting ? "Signing in…" : "Sign in"}
+            </button>
+            <Link to="/admin" className="text-sm text-slate-500">
+              Admin (demo)
+            </Link>
+          </div>
+        </form>
+      </div>
     </Layout>
   );
 }
 
-function DashboardPage() {
-  const [loading, setLoading] = useState(true);
-  const [summary, setSummary] = useState(null);
-  const [error, setError] = useState("");
-  const [products, setProducts] = useState([]);
-
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      setLoading(true);
-      setError("");
-      try {
-        const data = await apiFetch("/api/dashboard");
-        if (alive) setSummary(data);
-      } catch (err) {
-        if (alive) setError(err?.message || "Failed to load dashboard");
-      } finally {
-        if (alive) setLoading(false);
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, []);
-
-  const load = async (query = "") => {
-    setLoading(true);
-    setError("");
-    try {
-      const url = query
-        ? `/api/products?q=${encodeURIComponent(query)}`
-        : "/api/products";
-      const data = await apiFetch(url);
-      setProducts(data);
-    } catch (err) {
-      setError(err?.message || "Failed to load products");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    load("");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  return (
-    <Layout>
-      <h1>Dashboard</h1>
-      {loading && <p>Loading…</p>}
-      {error && <p style={{ color: "crimson" }}>Error: {error}</p>}
-      {!loading && !error && summary && (
-        <div style={{ display: "grid", gap: 16 }}>
-          <section
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-              gap: 12,
-            }}
-          >
-            <div style={cardStyle}>
-              <div style={cardTitleStyle}>Total Number of Products</div>
-              <div style={cardValueStyle}>{summary.totalProducts}</div>
-            </div>
-            <div style={cardStyle}>
-              <div style={cardTitleStyle}>Total items in Stock</div>
-              <div style={cardValueStyle}>{summary.totalItemsInStock}</div>
-            </div>
-            <div style={cardStyle}>
-              <div style={cardTitleStyle}>Total Value of all Products</div>
-              <div style={cardValueStyle}>
-                {Intl.NumberFormat(undefined, {
-                  style: "currency",
-                  currency: "INR",
-                }).format(Number(summary.totalInventoryValue || 0))}
-              </div>
-            </div>
-          </section>
-
-          <section>
-            <h2>Categories</h2>
-            {Array.isArray(summary.categories) &&
-            summary.categories.length > 0 ? (
-              <ul>
-                {summary.categories.map((c) => (
-                  <li key={c.id}>{c.name}</li>
-                ))}
-              </ul>
-            ) : (
-              <p>No categories found.</p>
-            )}
-          </section>
-          {!loading && !error && (
-            <div style={{ overflowX: "auto" }}>
-              <table
-                style={{
-                  borderCollapse: "collapse",
-                  width: "100%",
-                  minWidth: 720,
-                }}
-              >
-                <thead>
-                  <tr>
-                    <th style={thStyle}>ID</th>
-                    <th style={thStyle}>Product name</th>
-                    <th style={thStyle}>Category</th>
-                    <th style={thStyle}>Price</th>
-                    <th style={thStyle}>Total items in Stock</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {products.map((p) => (
-                    <tr key={p.id}>
-                      <td style={tdStyle}>{p.id}</td>
-                      <td style={tdStyle}>{p.name}</td>
-                      <td style={tdStyle}>{p.category?.name ?? "-"}</td>
-                      <td style={tdStyle}>
-                        {Intl.NumberFormat(undefined, {
-                          style: "currency",
-                          currency: "INR",
-                        }).format(Number(p.price || 0))}
-                      </td>
-                      <td style={tdStyle}>{p.totalItemsInStock ?? 0}</td>
-                    </tr>
-                  ))}
-                  {products.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={5}
-                        style={{
-                          ...tdStyle,
-                          textAlign: "center",
-                          color: "#777",
-                        }}
-                      >
-                        No products found.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
-    </Layout>
-  );
-}
-
+/* -------------------------
+   AdminPage (existing CRUD UI kept)
+   ------------------------- */
 function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState([]);
@@ -369,7 +464,7 @@ function AdminPage() {
 
   // CRUD form state
   const [showForm, setShowForm] = useState(false);
-  const [editing, setEditing] = useState(null); // product being edited or null for create
+  const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({
     name: "",
     description: "",
@@ -401,16 +496,14 @@ function AdminPage() {
     try {
       const data = await apiFetch("/api/categories");
       setCategories(data);
-    } catch (err) {
-      // don't break admin if categories fail — show empty list
-      console.error("Failed to load categories", err);
+    } catch {
+      // silently ignore
     }
   };
 
   useEffect(() => {
     load("");
     loadCategories();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const openCreate = () => {
@@ -494,131 +587,84 @@ function AdminPage() {
 
   return (
     <Layout>
-      <h1>Admin</h1>
-
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: 12,
-        }}
-      >
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            load(q);
-          }}
-          style={{ display: "flex", gap: 8, alignItems: "center" }}
-        >
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search products by name"
-            style={{ padding: 8, minWidth: 280 }}
-          />
-          <button
-            type="submit"
-            style={{ padding: "8px 12px", cursor: "pointer" }}
-          >
-            Search
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setQ("");
-              load("");
-            }}
-            style={{ padding: "8px 12px", cursor: "pointer" }}
-          >
-            Reset
-          </button>
-        </form>
-
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-2xl font-semibold">Admin</h1>
         <div>
           <button
             onClick={openCreate}
-            style={{ padding: "8px 12px", cursor: "pointer" }}
+            className="btn btn-primary flex items-center gap-2"
           >
+            <FaPlus />
             Create Product
           </button>
         </div>
       </div>
 
-      {loading && <p>Loading…</p>}
-      {error && <p style={{ color: "crimson" }}>Error: {error}</p>}
-
-      {/* Form panel (simple inline modal-like) */}
       {showForm && (
-        <div
-          style={{
-            border: "1px solid #ddd",
-            padding: 12,
-            marginBottom: 12,
-            borderRadius: 8,
-            background: "#fff",
-          }}
-        >
-          <h3>{editing ? `Edit Product #${editing.id}` : "Create Product"}</h3>
-          <form onSubmit={submitForm} style={{ display: "grid", gap: 8 }}>
-            <label>
-              Name
+        <div className="panel mb-4">
+          <h3 className="text-lg font-semibold mb-2">
+            {editing ? `Edit #${editing.id}` : "Create Product"}
+          </h3>
+          <form onSubmit={submitForm} className="grid gap-3">
+            <div>
+              <label className="form-label">Name</label>
               <input
                 required
+                className="input"
                 value={form.name}
                 onChange={(e) => handleChange("name", e.target.value)}
-                style={{ width: "100%", padding: 8 }}
               />
-            </label>
+            </div>
 
-            <label>
-              Description
+            <div>
+              <label className="form-label">Description</label>
               <textarea
+                className="input"
                 value={form.description}
                 onChange={(e) => handleChange("description", e.target.value)}
-                style={{ width: "100%", padding: 8 }}
               />
-            </label>
+            </div>
 
-            <label>
-              Price
-              <input
-                required
-                type="number"
-                step="0.01"
-                value={form.price}
-                onChange={(e) => handleChange("price", e.target.value)}
-                style={{ width: "100%", padding: 8 }}
-              />
-            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="form-label">Price</label>
+                <input
+                  required
+                  type="number"
+                  step="0.01"
+                  className="input"
+                  value={form.price}
+                  onChange={(e) => handleChange("price", e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="form-label">Total items in Stock</label>
+                <input
+                  type="number"
+                  className="input"
+                  value={form.totalItemsInStock}
+                  onChange={(e) =>
+                    handleChange("totalItemsInStock", e.target.value)
+                  }
+                />
+              </div>
+            </div>
 
-            <label>
-              Image URL
+            <div>
+              <label className="form-label">Image URL</label>
               <input
+                className="input"
                 value={form.imageUrl}
                 onChange={(e) => handleChange("imageUrl", e.target.value)}
-                style={{ width: "100%", padding: 8 }}
               />
-            </label>
+            </div>
 
-            <label>
-              Total items in Stock
-              <input
-                type="number"
-                value={form.totalItemsInStock}
-                onChange={(e) =>
-                  handleChange("totalItemsInStock", e.target.value)
-                }
-                style={{ width: "100%", padding: 8 }}
-              />
-            </label>
-
-            <label>
-              Category
+            <div>
+              <label className="form-label">Category</label>
               <select
+                className="input"
                 value={form.categoryId}
                 onChange={(e) => handleChange("categoryId", e.target.value)}
-                style={{ width: "100%", padding: 8 }}
               >
                 <option value="">-- none --</option>
                 {categories.map((c) => (
@@ -627,136 +673,88 @@ function AdminPage() {
                   </option>
                 ))}
               </select>
-            </label>
+            </div>
 
-            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-              <button
-                type="submit"
-                style={{ padding: "8px 12px", cursor: "pointer" }}
-              >
+            <div className="flex gap-2">
+              <button type="submit" className="btn btn-primary">
                 Save
               </button>
               <button
                 type="button"
                 onClick={closeForm}
-                style={{ padding: "8px 12px", cursor: "pointer" }}
+                className="btn btn-outline"
               >
                 Cancel
               </button>
             </div>
+            {error && <div className="text-red-600 mt-2">{error}</div>}
           </form>
         </div>
       )}
 
-      {!loading && !error && (
-        <div style={{ overflowX: "auto" }}>
-          <table
-            style={{ borderCollapse: "collapse", width: "100%", minWidth: 720 }}
-          >
-            <thead>
-              <tr>
-                <th style={thStyle}>ID</th>
-                <th style={thStyle}>Product name</th>
-                <th style={thStyle}>Category</th>
-                <th style={thStyle}>Price</th>
-                <th style={thStyle}>Total items in Stock</th>
-                <th style={thStyle}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {products.map((p) => (
-                <tr key={p.id}>
-                  <td style={tdStyle}>{p.id}</td>
-                  <td style={tdStyle}>{p.name}</td>
-                  <td style={tdStyle}>{p.category?.name ?? "-"}</td>
-                  <td style={tdStyle}>
-                    {Intl.NumberFormat(undefined, {
-                      style: "currency",
-                      currency: "USD",
-                    }).format(Number(p.price || 0))}
-                  </td>
-                  <td style={tdStyle}>{p.totalItemsInStock ?? 0}</td>
-                  <td style={tdStyle}>
+      <div className="overflow-x-auto">
+        <table className="min-w-full bg-white rounded-lg overflow-hidden">
+          <thead className="bg-slate-50">
+            <tr>
+              <th className="px-4 py-2 text-left text-sm font-medium">ID</th>
+              <th className="px-4 py-2 text-left text-sm font-medium">
+                Product
+              </th>
+              <th className="px-4 py-2 text-left text-sm font-medium">
+                Category
+              </th>
+              <th className="px-4 py-2 text-left text-sm font-medium">Price</th>
+              <th className="px-4 py-2 text-left text-sm font-medium">Stock</th>
+              <th className="px-4 py-2 text-left text-sm font-medium">
+                Actions
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {products.map((p) => (
+              <tr key={p.id} className="border-b">
+                <td className="px-4 py-3 text-sm">{p.id}</td>
+                <td className="px-4 py-3 text-sm">{p.name}</td>
+                <td className="px-4 py-3 text-sm">{p.category?.name ?? "-"}</td>
+                <td className="px-4 py-3 text-sm">
+                  {Intl.NumberFormat(undefined, {
+                    style: "currency",
+                    currency: "INR",
+                  }).format(Number(p.price || 0))}
+                </td>
+                <td className="px-4 py-3 text-sm">
+                  {p.totalItemsInStock ?? 0}
+                </td>
+                <td className="px-4 py-3 text-sm">
+                  <div className="flex gap-2">
                     <button
                       onClick={() => openEdit(p)}
-                      style={{
-                        marginRight: 8,
-                        padding: "6px 10px",
-                        cursor: "pointer",
-                      }}
+                      className="btn btn-outline flex items-center gap-2"
                     >
+                      <FaEdit />
                       Edit
                     </button>
                     <button
                       onClick={() => deleteProduct(p.id)}
-                      style={{
-                        padding: "6px 10px",
-                        cursor: "pointer",
-                        background: "#ffecec",
-                        border: "1px solid #f5c2c2",
-                      }}
+                      className="btn btn-danger flex items-center gap-2"
                     >
+                      <FaTrash />
                       Delete
                     </button>
-                  </td>
-                </tr>
-              ))}
-              {products.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={6}
-                    style={{ ...tdStyle, textAlign: "center", color: "#777" }}
-                  >
-                    No products found.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </Layout>
   );
 }
 
-// ---------------------------------------------
-// Styles
-// ---------------------------------------------
-const cardStyle = {
-  border: "1px solid #eee",
-  borderRadius: 8,
-  padding: 12,
-  background: "#fff",
-  boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
-};
-
-const cardTitleStyle = {
-  fontSize: 12,
-  textTransform: "uppercase",
-  color: "#666",
-  marginBottom: 6,
-};
-
-const cardValueStyle = {
-  fontSize: 22,
-  fontWeight: 600,
-};
-
-const thStyle = {
-  textAlign: "left",
-  borderBottom: "1px solid #ddd",
-  padding: "10px 8px",
-  background: "#fafafa",
-};
-
-const tdStyle = {
-  borderBottom: "1px solid #f0f0f0",
-  padding: "10px 8px",
-};
-
-// ---------------------------------------------
-// App / Router
-// ---------------------------------------------
+/* -------------------------
+   App & mount
+   ------------------------- */
 function App() {
   return (
     <AuthProvider>
@@ -775,9 +773,6 @@ function App() {
   );
 }
 
-// ---------------------------------------------
-// Bootstrap
-// ---------------------------------------------
 const rootEl = document.getElementById("root");
 const root = createRoot(rootEl);
 root.render(<App />);
